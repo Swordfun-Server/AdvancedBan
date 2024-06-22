@@ -16,15 +16,11 @@ import me.leoko.advancedban.utils.Permissionable;
 import me.leoko.advancedban.utils.Punishment;
 import me.leoko.advancedban.utils.tabcompletion.TabCompleter;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.nio.file.Files;
+import java.net.URLConnection;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -48,11 +44,9 @@ public class VelocityMethods implements MethodInterface {
     private final File configFile;
     private final File messageFile;
     private final File layoutFile;
-    private final File mysqlFile;
     private YamlFile config;
     private YamlFile messages;
     private YamlFile layouts;
-    private YamlFile mysql;
 
 
 
@@ -65,7 +59,6 @@ public class VelocityMethods implements MethodInterface {
         this.configFile = new File(getDataFolder(), "config.yml");
         this.messageFile =new File(getDataFolder(), "Messages.yml");
         this.layoutFile = new File(getDataFolder(), "Layouts.yml");
-        this.mysqlFile = new File(getDataFolder(), "MySQL.yml");
 
         if (server.getPluginManager().getPlugin("luckperms").isPresent()) {
             luckPermsSupport = true;
@@ -87,27 +80,20 @@ public class VelocityMethods implements MethodInterface {
             config = new YamlFile(configFile);
             messages = new YamlFile(messageFile);
             layouts = new YamlFile(layoutFile);
-            mysql = new YamlFile(mysqlFile);
 
             if (!configFile.exists()) {
-                config.createNewFile();
+                saveResource("config.yml", true);
             }
             if (!messageFile.exists()) {
-                messages.createNewFile();
+                saveResource("Messages.yml", true);
             }
             if (!layoutFile.exists()) {
-                layouts.createNewFile();
+                saveResource("Layouts.yml", true);
             }
-            if (!mysqlFile.exists()) {
-                mysql.createNewFile();
-            }
-
-
 
             config.load();
             messages.load();
             layouts.load();
-            mysql.load();
 
 
         } catch (IOException e) {
@@ -345,16 +331,7 @@ public class VelocityMethods implements MethodInterface {
 
     @Override
     public Object getMySQLFile() {
-        try{
-            if(mysql == null){
-                mysql = new YamlFile(mysqlFile);
-                mysql.load();
-            }
-            return mysql;
-        }catch (Exception e){
-            logger.error(e.getMessage());
-            return mysql;
-        }
+        return null;
     }
 
     @Override
@@ -469,4 +446,67 @@ public class VelocityMethods implements MethodInterface {
     public boolean isUnitTesting() {
         return false;
     }
+
+    //Extracted from https://github.com/Bukkit/Bukkit/blob/master/src/main/java/org/bukkit/plugin/java/JavaPlugin.java
+
+    public void saveResource(String resourcePath, boolean replace) {
+        if (resourcePath == null || resourcePath.equals("")) {
+            throw new IllegalArgumentException("ResourcePath cannot be null or empty");
+        }
+
+        resourcePath = resourcePath.replace('\\', '/');
+        InputStream in = getResource(resourcePath);
+        if (in == null) {
+            throw new IllegalArgumentException("The embedded resource '" + resourcePath + "' cannot be found");
+        }
+
+        File outFile = new File(getDataFolder(), resourcePath);
+        int lastIndex = resourcePath.lastIndexOf('/');
+        File outDir = new File(getDataFolder(), resourcePath.substring(0, lastIndex >= 0 ? lastIndex : 0));
+
+        if (!outDir.exists()) {
+            outDir.mkdirs();
+        }
+
+        try {
+            if (!outFile.exists() || replace) {
+                OutputStream out = new FileOutputStream(outFile);
+                byte[] buf = new byte[1024];
+                int len;
+                while ((len = in.read(buf)) > 0) {
+                    out.write(buf, 0, len);
+                }
+                out.close();
+                in.close();
+            } else {
+                logger.warn("Could not save " + outFile.getName() + " to " + outFile + " because " + outFile.getName() + " already exists.");
+            }
+        } catch (IOException ex) {
+            logger.error("Could not save " + outFile.getName() + " to " + outFile, ex);
+        }
+    }
+
+
+    public InputStream getResource(String filename) {
+        if (filename == null) {
+            throw new IllegalArgumentException("Filename cannot be null");
+        }
+
+        try {
+            URL url = getClass().getClassLoader().getResource(filename);
+
+            if (url == null) {
+                return null;
+            }
+
+            URLConnection connection = url.openConnection();
+            connection.setUseCaches(false);
+            return connection.getInputStream();
+        } catch (IOException ex) {
+            return null;
+        }
+    }
+
 }
+
+
